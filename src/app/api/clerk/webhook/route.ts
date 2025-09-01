@@ -32,7 +32,7 @@ export const POST = async (req: Request) => {
         },
       });
 
-      console.log(`User created successfully: ${emailAddress}`);
+      console.log(`User created successfully!: ${emailAddress}`);
     } catch (error) {
       console.error("Error creating user:", error);
       // If user already exists, that's okay
