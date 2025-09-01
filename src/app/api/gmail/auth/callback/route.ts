@@ -6,8 +6,13 @@ import { env } from "@/env";
 
 export async function GET(request: NextRequest) {
   try {
+    console.log("Gmail callback started");
+
     const { userId } = await auth();
+    console.log("Auth userId:", userId);
+
     if (!userId) {
+      console.log("No userId found, redirecting to sign-in");
       return NextResponse.redirect(new URL("/sign-in", request.url));
     }
 
@@ -15,12 +20,25 @@ export async function GET(request: NextRequest) {
     const code = searchParams.get("code");
     const state = searchParams.get("state");
 
+    console.log("Callback params:", {
+      hasCode: !!code,
+      codeLength: code?.length,
+      state,
+    });
+
     if (!code) {
+      console.log("No authorization code found");
       return NextResponse.json(
         { error: "Authorization code not found" },
         { status: 400 },
       );
     }
+
+    console.log("Creating OAuth2 client with:", {
+      clientId: env.GOOGLE_CLIENT_ID?.substring(0, 10) + "...",
+      hasClientSecret: !!env.GOOGLE_CLIENT_SECRET,
+      redirectUri: env.GOOGLE_REDIRECT_URI,
+    });
 
     // OAuth2 client oluştur
     const oauth2Client = new google.auth.OAuth2(
@@ -29,6 +47,7 @@ export async function GET(request: NextRequest) {
       env.GOOGLE_REDIRECT_URI,
     );
 
+    console.log("Getting tokens from Google...");
     // Authorization code'u token'a çevir
     const { tokens } = await oauth2Client.getToken(code);
 
@@ -36,9 +55,14 @@ export async function GET(request: NextRequest) {
       hasAccessToken: !!tokens.access_token,
       hasRefreshToken: !!tokens.refresh_token,
       expiryDate: tokens.expiry_date,
+      tokenKeys: Object.keys(tokens),
     });
 
     if (!tokens.access_token || !tokens.refresh_token) {
+      console.log("Missing tokens:", {
+        hasAccessToken: !!tokens.access_token,
+        hasRefreshToken: !!tokens.refresh_token,
+      });
       return NextResponse.json(
         { error: "Failed to get tokens" },
         { status: 400 },
