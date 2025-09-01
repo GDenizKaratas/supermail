@@ -7,13 +7,13 @@ export const env = createEnv({
    * isn't built with invalid env vars.
    */
   server: {
-    DATABASE_URL: z.string().url(),
+    DATABASE_URL: z.string().url().optional(),
     NODE_ENV: z
       .enum(["development", "test", "production"])
       .default("development"),
-    GOOGLE_CLIENT_ID: z.string(),
-    GOOGLE_CLIENT_SECRET: z.string(),
-    GOOGLE_REDIRECT_URI: z.string().url(),
+    GOOGLE_CLIENT_ID: z.string().optional(),
+    GOOGLE_CLIENT_SECRET: z.string().optional(),
+    GOOGLE_REDIRECT_URI: z.string().url().optional(),
   },
 
   /**
@@ -46,5 +46,5 @@ export const env = createEnv({
    * Makes it so that empty strings are treated as undefined. `SOME_VAR: z.string()` and
    * `SOME_VAR=''` will throw an error.
    */
-  emptyStringAsUndefined: true,
+  emptyStringAsUndefined: false,
 });
