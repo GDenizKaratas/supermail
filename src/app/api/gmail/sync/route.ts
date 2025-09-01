@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
     const gmailClient = createGmailClient(accessToken);
 
     // Gmail'den email'leri çek
-    const messagesResponse = await fetchGmailMessages(gmailClient, 50);
+    const messagesResponse = await fetchGmailMessages(gmailClient, 100);
     const messages = messagesResponse.messages || [];
 
     let syncedCount = 0;
