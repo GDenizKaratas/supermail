@@ -5,8 +5,8 @@ export default async function Home() {
   const { userId } = await auth();
 
   if (userId) {
-    // redirect("/dashboard");
-    redirect("/mail");
+    redirect("/dashboard");
+    // redirect("/mail");
   } else {
     redirect("/sign-in");
   }
