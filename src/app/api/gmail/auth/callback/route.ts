@@ -102,15 +102,16 @@ export async function GET(request: NextRequest) {
       console.log("Created new user:", user.id);
     }
 
-    // Account'u güncelle veya oluştur
+    // Account'u güncelle veya oluştur (unique: provider + emailAddress)
     await db.account.upsert({
       where: {
-        userId_email: {
-          userId,
-          email,
+        provider_emailAddress: {
+          provider: "gmail",
+          emailAddress: email,
         },
       },
       update: {
+        userId,
         accessToken: tokens.access_token,
         refreshToken: tokens.refresh_token,
         tokenExpiresAt: tokens.expiry_date
@@ -120,13 +121,13 @@ export async function GET(request: NextRequest) {
       },
       create: {
         userId,
-        email,
+        provider: "gmail",
+        emailAddress: email,
         accessToken: tokens.access_token,
         refreshToken: tokens.refresh_token,
         tokenExpiresAt: tokens.expiry_date
           ? new Date(tokens.expiry_date)
           : null,
-        provider: "gmail",
       },
     });
 

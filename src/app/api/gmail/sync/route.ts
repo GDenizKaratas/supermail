@@ -7,7 +7,27 @@ import {
   fetchGmailMessageDetails,
   parseGmailMessage,
   refreshGmailToken,
-} from "@/lib/gmail";
+} from "@/lib/providers/gmail";
+
+async function getOrCreateEmailAddress(
+  accountId: string,
+  addr: { name: string | null; address: string; raw: string },
+) {
+  const existing = await db.emailAddress.findUnique({
+    where: {
+      accountId_address: { accountId, address: addr.address },
+    },
+  });
+  if (existing) return existing;
+  return db.emailAddress.create({
+    data: {
+      accountId,
+      address: addr.address,
+      name: addr.name ?? undefined,
+      raw: addr.raw,
+    },
+  });
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -24,7 +44,7 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    if (!account || !account.accessToken) {
+    if (!account?.accessToken) {
       return NextResponse.json(
         { error: "Gmail account not connected" },
         { status: 400 },
@@ -75,34 +95,139 @@ export async function POST(request: NextRequest) {
     let newEmails = 0;
 
     for (const message of messages) {
-      // Email'in zaten var olup olmadığını kontrol et
-      const existingEmail = await db.email.findUnique({
-        where: { gmailMessageId: message.id },
-      });
-
-      if (existingEmail) {
-        syncedCount++;
-        continue;
-      }
-
       try {
-        // Email detaylarını çek
+        // Detayları al ve normalize et
         const messageDetails = await fetchGmailMessageDetails(
           gmailClient,
           message.id,
         );
-        const parsedEmail = parseGmailMessage(messageDetails);
+        const parsed = parseGmailMessage(messageDetails);
 
-        // Email'i veritabanına kaydet
-        await db.email.create({
-          data: {
-            userId,
-            accountId: account.id,
-            ...parsedEmail,
-          },
-        });
+        // Thread'i bul veya oluştur (unique: accountId + providerThreadId)
+        const providerThreadId = parsed.providerThreadId ?? null;
+        let thread = providerThreadId
+          ? await db.thread.findUnique({
+              where: {
+                accountId_providerThreadId: {
+                  accountId: account.id,
+                  providerThreadId,
+                },
+              },
+            })
+          : null;
 
-        newEmails++;
+        if (!thread) {
+          thread = await db.thread.create({
+            data: {
+              accountId: account.id,
+              providerThreadId,
+              subject: parsed.subject ?? "",
+              lastMessageDate: parsed.receivedAt,
+              participantIds: [
+                parsed.from.address,
+                ...parsed.to.map((a) => a.address),
+                ...parsed.cc.map((a) => a.address),
+                ...parsed.bcc.map((a) => a.address),
+              ],
+            },
+          });
+        } else {
+          await db.thread.update({
+            where: { id: thread.id },
+            data: { lastMessageDate: parsed.receivedAt },
+          });
+        }
+
+        // EmailAddress upsert
+        const fromAddr = await getOrCreateEmailAddress(account.id, parsed.from);
+        const toAddrs = await Promise.all(
+          parsed.to.map((a) => getOrCreateEmailAddress(account.id, a)),
+        );
+        const ccAddrs = await Promise.all(
+          parsed.cc.map((a) => getOrCreateEmailAddress(account.id, a)),
+        );
+        const bccAddrs = await Promise.all(
+          parsed.bcc.map((a) => getOrCreateEmailAddress(account.id, a)),
+        );
+        const replyToAddrs = await Promise.all(
+          parsed.replyTo.map((a) => getOrCreateEmailAddress(account.id, a)),
+        );
+
+        // Email upsert (unique: accountId + providerMessageId)
+        const providerMessageId = parsed.providerMessageId ?? null;
+
+        const existing = providerMessageId
+          ? await db.email.findUnique({
+              where: {
+                accountId_providerMessageId: {
+                  accountId: account.id,
+                  providerMessageId,
+                },
+              },
+            })
+          : null;
+
+        if (existing) {
+          await db.email.update({
+            where: { id: existing.id },
+            data: {
+              threadId: thread.id,
+              subject: parsed.subject,
+              body: parsed.body,
+              bodySnippet: parsed.bodySnippet,
+              sysLabels: parsed.sysLabels,
+              keywords: parsed.keywords,
+              sysClassifications: parsed.sysClassifications,
+              sensitivity: "normal",
+              hasAttachments: parsed.hasAttachments,
+              internetHeaders: parsed.internetHeaders,
+              nativeProperties: parsed.nativeProperties,
+              folderId: parsed.folderId ?? undefined,
+              createdTime: parsed.createdTime,
+              lastModifiedTime: parsed.lastModifiedTime,
+              sentAt: parsed.sentAt,
+              receivedAt: parsed.receivedAt,
+              internetMessageId: parsed.internetMessageId ?? undefined,
+              fromId: fromAddr.id,
+              to: { set: toAddrs.map((a) => ({ id: a.id })) },
+              cc: { set: ccAddrs.map((a) => ({ id: a.id })) },
+              bcc: { set: bccAddrs.map((a) => ({ id: a.id })) },
+              replyTo: { set: replyToAddrs.map((a) => ({ id: a.id })) },
+            },
+          });
+        } else {
+          await db.email.create({
+            data: {
+              accountId: account.id,
+              threadId: thread.id,
+              providerMessageId,
+              internetMessageId: parsed.internetMessageId ?? undefined,
+              subject: parsed.subject,
+              body: parsed.body,
+              bodySnippet: parsed.bodySnippet,
+              sysLabels: parsed.sysLabels,
+              keywords: parsed.keywords,
+              sysClassifications: parsed.sysClassifications,
+              sensitivity: "normal",
+              meetingMessageMethod: null,
+              hasAttachments: parsed.hasAttachments,
+              internetHeaders: parsed.internetHeaders,
+              nativeProperties: parsed.nativeProperties,
+              folderId: parsed.folderId ?? undefined,
+              createdTime: parsed.createdTime,
+              lastModifiedTime: parsed.lastModifiedTime,
+              sentAt: parsed.sentAt,
+              receivedAt: parsed.receivedAt,
+              fromId: fromAddr.id,
+              to: { connect: toAddrs.map((a) => ({ id: a.id })) },
+              cc: { connect: ccAddrs.map((a) => ({ id: a.id })) },
+              bcc: { connect: bccAddrs.map((a) => ({ id: a.id })) },
+              replyTo: { connect: replyToAddrs.map((a) => ({ id: a.id })) },
+            },
+          });
+          newEmails++;
+        }
+
         syncedCount++;
       } catch (error) {
         console.error(`Failed to sync email ${message.id}:`, error);

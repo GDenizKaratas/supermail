@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { createGmailAuthUrl } from "@/lib/gmail";
+import { createGmailAuthUrl } from "@/lib/providers/gmail";
 
 export async function GET(request: NextRequest) {
   try {

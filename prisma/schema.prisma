@@ -2,84 +2,190 @@
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 generator client {
-    provider = "prisma-client-js"
+  provider = "prisma-client-js"
 }
 
 datasource db {
-    provider = "postgresql"
-    url      = env("DATABASE_URL")
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
-// schema.prisma
+
 model User {
-  id           String        @id @default(cuid())
-  emailAddress String        @unique
-  firstName    String
-  lastName     String
+  id           String   @id @default(cuid())
+  emailAddress String   @unique
+  firstName    String?
+  lastName     String?
   imageUrl     String?
-  
-  // Gmail entegrasyonu için eklenenler
+
+  role         Role     @default(user)
   accounts     Account[]
-  emails       Email[]
-  
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+enum Role {
+  user
+  admin
 }
 
 model Account {
-  id                String   @id @default(cuid())
-  userId            String
-  email             String
-  
-  // OAuth bilgileri
-  accessToken       String?  @db.Text
-  refreshToken      String?  @db.Text
-  tokenExpiresAt    DateTime?
-  
-  // Gmail API bilgileri
-  historyId         String?  // Gmail sync için
-  
-  // Provider bilgisi (gmail, outlook vs)
-  provider          String   @default("gmail")
-  
-  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-  
-  @@unique([userId, email])
+  id             String   @id @default(cuid())
+  userId         String
+  provider       String   // "gmail" | "outlook" | "imap" ...
+  emailAddress   String
+  name           String?
+
+  // OAuth/IMAP
+  accessToken    String?  @db.Text
+  refreshToken   String?  @db.Text
+  tokenExpiresAt DateTime?
+
+  // Generic incremental sync cursor (Gmail: historyId, Outlook: deltaToken, IMAP: last UID)
+  syncCursor     String?
+
+  user     User     @relation(fields: [userId], references: [id])
+  threads  Thread[]
+  emails   Email[]
+  emailAddresses EmailAddress[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([provider, emailAddress])
   @@index([userId])
 }
 
+model Thread {
+  id               String   @id @default(cuid())
+  accountId        String
+  account          Account  @relation(fields: [accountId], references: [id])
+
+  // Provider-agnostic thread ID
+  providerThreadId String?
+
+  subject          String?
+  participantIds   String[]
+  lastMessageDate  DateTime
+  done             Boolean  @default(false)
+
+    inboxStatus Boolean @default(true)
+    draftStatus Boolean @default(false)
+    sentStatus  Boolean @default(false)
+
+
+  emails    Email[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([accountId, providerThreadId])
+  @@index([accountId])
+    @@index([done])
+    @@index([inboxStatus])
+    @@index([draftStatus])
+    @@index([sentStatus])
+    @@index([lastMessageDate])
+
+  
+}
+
 model Email {
-  id              String    @id @default(cuid())
-  userId          String
-  accountId       String
-  
-  // Gmail API'den gelen bilgiler
-  gmailMessageId  String    @unique
-  gmailThreadId   String?
-  
-  // Email içeriği
-  subject         String?
-  from            String
-  to              String[]
-  cc              String[]
-  bcc             String[]
-  body            String?   @db.Text
-  snippet         String?
-  
-  // Metadata
-  isRead          Boolean   @default(false)
-  isStarred       Boolean   @default(false)
-  labels          String[]
-  
-  receivedAt      DateTime
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  
-  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  @@index([userId])
-  @@index([gmailMessageId])
+  id               String   @id @default(cuid())
+  accountId        String
+  account          Account  @relation(fields: [accountId], references: [id])
+
+  threadId         String
+  thread           Thread   @relation(fields: [threadId], references: [id])
+
+  // Provider-agnostic message ID
+  providerMessageId   String?
+  // RFC Message-ID header
+  internetMessageId   String?
+
+  createdTime      DateTime
+  lastModifiedTime DateTime
+  sentAt           DateTime
+  receivedAt       DateTime
+
+  subject          String?
+  body             String?   @db.Text
+  bodySnippet      String?
+  sysLabels        String[]
+  keywords         String[]
+  sysClassifications String[]
+  sensitivity      Sensitivity @default(normal)
+  meetingMessageMethod MeetingMessageMethod?
+
+  hasAttachments   Boolean
+  inReplyTo        String?
+  references       String?
+  threadIndex      String?
+  internetHeaders  Json[]
+  nativeProperties Json?
+  folderId         String?
+
+  // Address relations
+  fromId  String
+  from    EmailAddress @relation("FromEmail", fields: [fromId], references: [id])
+  to      EmailAddress[] @relation("ToEmails")
+  cc      EmailAddress[] @relation("CcEmails")
+  bcc     EmailAddress[] @relation("BccEmails")
+  replyTo EmailAddress[] @relation("ReplyToEmails")
+
+  attachments EmailAttachment[]
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([accountId, providerMessageId])
+  @@index([threadId])
+  @@index([accountId])
   @@index([receivedAt])
+  @@index([internetMessageId])
+}
+
+model EmailAddress {
+  id        String  @id @default(cuid())
+  accountId String
+  account   Account @relation(fields: [accountId], references: [id])
+
+  name    String?
+  address String
+  raw     String?
+
+  sentEmails    Email[] @relation("FromEmail")
+  receivedTo    Email[] @relation("ToEmails")
+  receivedCc    Email[] @relation("CcEmails")
+  receivedBcc   Email[] @relation("BccEmails")
+  replyToEmails Email[] @relation("ReplyToEmails")
+
+  @@unique([accountId, address])
+}
+
+model EmailAttachment {
+  id        String  @id @default(cuid())
+  emailId   String
+  email     Email   @relation(fields: [emailId], references: [id])
+
+  name      String
+  mimeType  String
+  size      Int
+  inline    Boolean
+  contentId String?
+  content   String?
+}
+
+enum Sensitivity {
+  normal
+  private
+  personal
+  confidential
+}
+
+enum MeetingMessageMethod {
+  request
+  reply
+  cancel
+  counter
+  other
 }
