@@ -3,23 +3,29 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+
+interface EmailAddress {
+  id: string;
+  accountId: string;
+  name?: string | null;
+  address: string;
+  raw?: string | null;
+}
 
 interface Email {
   id: string;
-  subject: string;
-  from: string;
-  snippet: string;
-  isRead: boolean;
-  isStarred: boolean;
+  subject?: string | null;
+  from: EmailAddress; // relation artık object
+  bodySnippet?: string | null;
+  hasAttachments: boolean;
   receivedAt: string;
+  createdAt: string;
+  updatedAt: string;
+  // opsiyonel bayraklar (istersen db’den derive edebilirsin)
+  isRead?: boolean;
+  isStarred?: boolean;
 }
 
 interface SyncResult {
@@ -36,13 +42,11 @@ export default function DashboardPage() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<SyncResult | null>(null);
 
-  // Gmail bağlantısını başlat
   const connectGmail = async () => {
     setIsConnecting(true);
     try {
       const response = await fetch("/api/gmail/auth");
       const data = await response.json();
-
       if (data.authUrl) {
         window.location.href = data.authUrl;
       }
@@ -54,19 +58,14 @@ export default function DashboardPage() {
     }
   };
 
-  // Gmail'den email'leri sync et
   const syncEmails = async () => {
     setIsSyncing(true);
     try {
-      const response = await fetch("/api/gmail/sync", {
-        method: "POST",
-      });
+      const response = await fetch("/api/gmail/sync", { method: "POST" });
       const data = await response.json();
-
       if (data.success) {
         setSyncResult(data);
-        // Email'leri yeniden yükle
-        loadEmails();
+        await loadEmails();
       } else {
         alert("Sync başarısız: " + data.error);
       }
@@ -78,7 +77,6 @@ export default function DashboardPage() {
     }
   };
 
-  // Email'leri yükle
   const loadEmails = async () => {
     try {
       const response = await fetch("/api/emails");
@@ -91,7 +89,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (userId) {
-      loadEmails();
+      void loadEmails();
     }
   }, [userId]);
 
@@ -148,7 +146,7 @@ export default function DashboardPage() {
       </div>
 
       <div className="space-y-4">
-        <h2 className="text-2xl font-semibold">Email'ler ({emails.length})</h2>
+        <h2 className="text-2xl font-semibold">Emailler ({emails.length})</h2>
 
         {emails.length === 0 ? (
           <Card>
@@ -184,9 +182,12 @@ export default function DashboardPage() {
                       )}
                     </div>
                     <p className="mb-1 text-sm text-gray-600">
-                      <strong>Kimden:</strong> {email.from}
+                      <strong>Kimden:</strong>{" "}
+                      {email.from?.name
+                        ? `${email.from.name} <${email.from.address}>`
+                        : email.from?.address}
                     </p>
-                    <p className="mb-2 text-gray-700">{email.snippet}</p>
+                    <p className="mb-2 text-gray-700">{email.bodySnippet}</p>
                     <p className="text-xs text-gray-500">
                       {new Date(email.receivedAt).toLocaleString("tr-TR")}
                     </p>
