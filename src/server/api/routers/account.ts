@@ -31,7 +31,7 @@ export const authoriseAccountAccess = async (
     },
     select: {
       id: true,
-      email: true,
+      emailAddress: true,
     },
   });
   if (!account) throw new Error("Invalid token");
@@ -46,7 +46,7 @@ export const accountRouter = createTRPCRouter({
       },
       select: {
         id: true,
-        email: true,
+        emailAddress: true,
         provider: true,
         createdAt: true,
         updatedAt: true,
