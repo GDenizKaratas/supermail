@@ -12,6 +12,9 @@ import { cn } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import AccountSwitcher from "./account-switcher";
 import Sidebar from "./sidebar";
+import ThreadList from "./thread-list";
+import ThreadDisplay from "./thread-display";
+import { useLocalStorage } from "usehooks-ts";
 
 type Props = {
   deafultLayout: number[] | undefined;
@@ -24,6 +27,8 @@ const Mail = ({
   navCollapsedSize,
   defaultCollapsed,
 }: Props) => {
+  const [_, setDone] = useLocalStorage("supermail-done", false);
+
   const [isCollapsed, setIsCollapsed] = React.useState(defaultCollapsed);
   return (
     <TooltipProvider delayDuration={0}>
@@ -69,7 +74,7 @@ const Mail = ({
         </ResizablePanel>
         <ResizableHandle
           withHandle
-          className="w-1 cursor-col-resize bg-gray-200 hover:bg-gray-300"
+          // className="w-1 cursor-col-resize bg-gray-200 hover:bg-gray-300"
         />
         <ResizablePanel defaultSize={deafultLayout[1]} minSize={30}>
           <Tabs defaultValue="inbox">
@@ -77,12 +82,14 @@ const Mail = ({
               <h1 className="text-xl font-bold">Inbox</h1>
               <TabsList className="ml-auto">
                 <TabsTrigger
+                  onClick={() => setDone(false)}
                   value="inbox"
                   className="text-xinc-600 dark:text-xinc-200"
                 >
                   Inbox
                 </TabsTrigger>
                 <TabsTrigger
+                  onClick={() => setDone(true)}
                   value="done"
                   className="text-xinc-600 dark:text-xinc-200"
                 >
@@ -93,8 +100,12 @@ const Mail = ({
             <Separator />
             {/* Searchbar */}
             Searchbar
-            <TabsContent value="inbox">INBOX</TabsContent>
-            <TabsContent value="done">DONE</TabsContent>
+            <TabsContent value="inbox">
+              <ThreadList></ThreadList>
+            </TabsContent>
+            <TabsContent value="done">
+              <ThreadList></ThreadList>
+            </TabsContent>
           </Tabs>
         </ResizablePanel>
 
@@ -105,7 +116,7 @@ const Mail = ({
           maxSize={70}
           className="flex-1"
         >
-          Email Thread View
+          <ThreadDisplay />
         </ResizablePanel>
       </ResizablePanelGroup>
     </TooltipProvider>
