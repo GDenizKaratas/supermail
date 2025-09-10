@@ -11,6 +11,7 @@ import { Send } from "lucide-react";
 import TagInput from "./tag-input";
 import { Input } from "@/components/ui/input";
 import { api } from "@/trpc/react";
+import AiComposeButton from "./ai-compose-button";
 type Props = {
   subject: string;
   setSubject: (value: string) => void;
@@ -43,11 +44,15 @@ const EmailEditor = ({
   const [value, setValue] = React.useState("");
   const [expanded, setExpanded] = React.useState(defaultToolbarExpanded);
 
+  const onGenerate = (token: string) => {
+    console.log(token);
+    editor?.commands?.insertContent(token);
+  };
+
   // const { data: suggestions } = api..getEmailSuggestions.useQuery(
   //   { accountId: accountId, query: "" },
   //   { enabled: !!accountId },
   // );
-  const suggestions: any = [];
   const customText = Text.extend({
     addKeyboardShortcuts() {
       return {
@@ -105,12 +110,16 @@ const EmailEditor = ({
             />
           </>
         )}
-
         <div className="flex items-center gap-2"></div>
         <div className="cursor-pointer" onClick={() => setExpanded(!expanded)}>
           <span className="font-medium text-green-600">Draft </span>
           <span>to {to.join(", ")}</span>
         </div>
+
+        <AiComposeButton
+          isComposing={defaultToolbarExpanded ?? false}
+          onGenerate={onGenerate}
+        />
       </div>
       <div className="prose w-full px-4">
         <EditorContent

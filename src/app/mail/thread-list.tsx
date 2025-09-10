@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 const ThreadList = () => {
   const { threads, threadId, setThreadId } = useThreads();
 
-  console.log("threads", threads);
+  // console.log("threads", threads);
   const groupedThreads = threads?.reduce(
     (acc, thread) => {
       const date = format(thread.emails[0]?.sentAt ?? new Date(), "yyyy-MM-dd");
@@ -24,7 +24,7 @@ const ThreadList = () => {
     {} as Record<string, typeof threads>,
   );
 
-  console.log("groupedThreads", groupedThreads);
+  // console.log("groupedThreads", groupedThreads);
 
   return (
     <div className="max-h-[calc(100vh-120px)] max-w-full overflow-y-scroll">

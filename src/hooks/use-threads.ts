@@ -17,10 +17,6 @@ const useThreads = () => {
   const [done] = useLocalStorage("supermail-done", false);
   const [threadId, setThreadId] = useAtom(threadIdAtom);
 
-  console.log("AccountId from localStorage:", accountId);
-  console.log("Tab from localStorage:", tab);
-  console.log("Done from localStorage:", done);
-
   const {
     data: threads,
     isFetching,
@@ -37,9 +33,6 @@ const useThreads = () => {
       refetchInterval: 5000,
     },
   );
-
-  console.log("Threads:", threads);
-  console.log("AccountId:", accountId);
 
   return {
     threads,
